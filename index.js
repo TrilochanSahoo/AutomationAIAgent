@@ -1,10 +1,12 @@
 import 'dotenv/config';
-import {Agent,run, tool} from '@openai/agents'
+import {Agent, Runner, tool} from '@openai/agents'
 import {z} from 'zod'
 import {chromium} from 'playwright'
 import fs from "fs";
 import path from "path";
-import { base64 } from 'zod/v4';
+import readline from "readline"
+import chalk from 'chalk';
+import { logWithIcon } from './utility/icons.js';
 
 const browser = await chromium.launch({
     headless: false,
@@ -97,20 +99,29 @@ const clickOnFields = tool({
 
 const clickOnButton = tool({
     name: 'click_on_button',
-    description: 'Clicks on the screen with specified button name from the screenshot image, the field which is the most accurate name and context in the query.',
+    description: 'Clicks on the screen with specified button or link name from the screenshot image, the field which is the most accurate name and context in the query.',
     parameters: z.object({
-        field: z.string().describe("Button Field name present in the screenshot that matches the user query."),
+        field: z.string().describe("Button or link Field name present in the screenshot that matches the user query."),
         x: z.number().describe('x axis on the screen where we need to click for the Button Field.'),
         y: z.number().describe('Y axis on the screen where we need to click for the Button Field.')
     }),
     async execute({field,x,y}){
         console.log("Inside Button",x,y,field)
         page.waitForTimeout(2000)
-        const button = page.getByRole('button', { name: field });
-        button.hover();
-        page.waitForTimeout(1000);  // waits 1 second (adjust as needed)
-        button.click();
-        console.log("Completed...")
+        const button = page.locator(`button:has-text("${field}")`);
+        const link = page.locator(`a:has-text("${field}")`);
+        if(await button.count()>0){
+            button.hover();
+            page.waitForTimeout(1000);  // waits 1 second (adjust as needed)
+            button.click();
+        }else if (await link.count() > 0){
+            console.log("Inside Link",x,y,field)
+            link.first().hover();
+            link.first().click();
+        }else{
+            console.log("not found")
+        }
+        logWithIcon("success", "Completed...");
     }
 
 })
@@ -145,13 +156,41 @@ const gatewayAgent = Agent.create({
 
 
 async function chatWithAgent(query){
-    const result = await run(gatewayAgent, query);
-    console.log(result.finalOutput)
-    // console.log(res)
-    console.log("-----------------------------------------")
+    try {
+        const runner = new Runner()
+        const response = await runner.run(websiteAutomationAgent, query, {
+          maxTurns: 60,
+        });
+        logWithIcon("agent", response.finalOutput)
+        // console.log(res)
+        console.log(chalk.gray("-----------------------------------------"));
+    } catch (error) {
+        logWithIcon("error", err.message);
+    }
 }
 
-chatWithAgent("Hey what you are doing...")
+// chatWithAgent("Hey what you are doing...")
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  prompt: "👤 ", // prompt symbol
+});
+
+console.log(chalk.green("Welcome to CLI-Agent! Type 'exit' to quit."));
+rl.prompt();
+
+rl.on("line",(input) => {
+  if (input.trim().toLowerCase() === "exit") {
+    logWithIcon("info", "Goodbye!");
+    rl.close();
+    return;
+  }
+
+  // predefined actions
+  chatWithAgent(input)
+
+  rl.prompt(); // show prompt again
+});
 
 
-// chatWithAgent('Hey open https://ui.chaicode.com/auth-sada/login and Then sign in with by filling up with email as abc@gmail.com, password as 123@erfs. ')
