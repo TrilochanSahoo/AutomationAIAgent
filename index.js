@@ -22,7 +22,10 @@ const browser = await chromium.launch({
 
 })
 
-const page = await browser.newPage();
+const context = await browser.newContext({
+  viewport: null, // disables Playwright's default resizing
+});
+const page = await context.newPage();
 
 
 const openBrowser = tool({
@@ -32,7 +35,8 @@ const openBrowser = tool({
         url : z.string().describe('website url which is given from user')
     }),
     async execute(input) {
-        console.log(input.url)
+        console.log(gradient.atlas("🚀 Running a web automation task..."));
+        logWithIcon("info",`opening ${input.url}`)
         await page.goto(input.url,{ waitUntil: "networkidle" })
     }
 })
@@ -90,7 +94,6 @@ const clickOnFields = tool({
   async execute({ field, x, y,value }) {
     console.log(gradient.atlas("🚀 Running a web automation task..."));
     logWithIcon("info",`Inside section -> ${x}, ${y}, ${field}`)
-    page.waitForTimeout(2000)
     const inputField = page.getByLabel(field)
     
     inputField.hover()
@@ -168,7 +171,6 @@ const websiteAutomationAgent = new Agent({
     - After website load call the 'take_screenshot' tool in the begining. It will take screenshot of the screen.
     - After taking screenshot, plan the next action what needs to be done.
     - If form need to be filled up, findout field location and filled the user's input in the screen. Once filled go to next field. 
-    - if sign in with github comes then use tool to signin.
     - perfrom one task at a time. Fill one field at a time and take screenshot and then go for next field.
     - Always think before performing any task.
     
