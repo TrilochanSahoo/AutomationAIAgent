@@ -7,6 +7,12 @@ import path from "path";
 import readline from "readline"
 import chalk from 'chalk';
 import { logWithIcon } from './utility/icons.js';
+import figlet from "figlet";
+import gradient from "gradient-string";
+
+let chatThread = []
+
+
 
 const browser = await chromium.launch({
     headless: false,
@@ -27,7 +33,7 @@ const openBrowser = tool({
     }),
     async execute(input) {
         console.log(input.url)
-        page.goto(input.url,{ waitUntil: "networkidle" })
+        await page.goto(input.url,{ waitUntil: "networkidle" })
     }
 })
 
@@ -36,7 +42,6 @@ const takeScreenShot = tool({
     description : 'This tool will take screenshot, arranging in orders and return filename and base64 format.',
     parameters: z.object({}),
     async execute(){
-
         const screenshotsDir = path.join(process.cwd(), "screenshots");
 
         if (!fs.existsSync(screenshotsDir)) {
@@ -83,8 +88,8 @@ const clickOnFields = tool({
     value: z.string().describe("value given by user in query."),
   }),
   async execute({ field, x, y,value }) {
-
-    console.log("Inside x, y",x, y, field)
+    console.log(gradient.atlas("🚀 Running a web automation task..."));
+    logWithIcon("info",`Inside section -> ${x}, ${y}, ${field}`)
     page.waitForTimeout(2000)
     const inputField = page.getByLabel(field)
     
@@ -93,7 +98,7 @@ const clickOnFields = tool({
       
       page.mouse.click((await inputField.boundingBox()).x + 5,(await inputField.boundingBox()).y + 5);
       page.keyboard.type(value, { delay: 100 });
-      console.log("fill...")
+      console.log("fill...\n")
   },
 });
 
@@ -101,12 +106,13 @@ const clickOnButton = tool({
     name: 'click_on_button',
     description: 'Clicks on the screen with specified button or link name from the screenshot image, the field which is the most accurate name and context in the query.',
     parameters: z.object({
-        field: z.string().describe("Button or link Field name present in the screenshot that matches the user query."),
+        field: z.string().describe("Button or link Field name present in the screenshot that matches the user query. "),
         x: z.number().describe('x axis on the screen where we need to click for the Button Field.'),
         y: z.number().describe('Y axis on the screen where we need to click for the Button Field.')
     }),
     async execute({field,x,y}){
-        console.log("Inside Button",x,y,field)
+        console.log(gradient.atlas("🚀 Running a web automation task..."));
+        logWithIcon("info",`Inside section -> ${x}, ${y}, ${field}`)
         page.waitForTimeout(2000)
         const button = page.locator(`button:has-text("${field}")`);
         const link = page.locator(`a:has-text("${field}")`);
@@ -115,16 +121,40 @@ const clickOnButton = tool({
             page.waitForTimeout(1000);  // waits 1 second (adjust as needed)
             button.click();
         }else if (await link.count() > 0){
-            console.log("Inside Link",x,y,field)
+            // console.log("Inside Link",x,y,field)
             link.first().hover();
             link.first().click();
         }else{
-            console.log("not found")
+            console.log("not found\n")
         }
-        logWithIcon("success", "Completed...");
+        logWithIcon("success", "Completed...\n");
     }
 
 })
+
+// const signWithGithub = tool({
+//   name: 'sign_in_with_Github',
+//     description: 'Sign in with Github by clicking on button or if already github page open then it fill with username and password from ".env" file and sign in. The button name will present which is the most accurate context in the query.',
+//     parameters: z.object({
+//         field: z.string().describe("Button or link Field name present in the screenshot that matches the user query."),
+//         x: z.number().describe('x axis on the screen where we need to click for the Button Field.'),
+//         y: z.number().describe('Y axis on the screen where we need to click for the Button Field.')
+//     }),  
+//     async execute({field,x,y}){
+//         console.log("Inside Github ",x,y,field)
+//         page.waitForTimeout(2000)
+//         await page.getByRole('button', { name: field}).click();
+//         await page.fill('input[name="login"]', process.env.GITHUB_USERNAME);
+//         await page.fill('input[name="password"]', process.env.GITHUB_PASSWORD);
+//         await page.click('input[name="commit"]');
+
+//         if (await page.locator('button:has-text("Authorize")').count()) {
+//             await page.click('button:has-text("Authorize")');
+//         }
+
+//         console.log("completed github login....")
+//     }
+// })
 
 const websiteAutomationAgent = new Agent({
     name : "Website Automation Agent",
@@ -138,6 +168,7 @@ const websiteAutomationAgent = new Agent({
     - After website load call the 'take_screenshot' tool in the begining. It will take screenshot of the screen.
     - After taking screenshot, plan the next action what needs to be done.
     - If form need to be filled up, findout field location and filled the user's input in the screen. Once filled go to next field. 
+    - if sign in with github comes then use tool to signin.
     - perfrom one task at a time. Fill one field at a time and take screenshot and then go for next field.
     - Always think before performing any task.
     
@@ -158,18 +189,30 @@ const gatewayAgent = Agent.create({
 async function chatWithAgent(query){
     try {
         const runner = new Runner()
-        const response = await runner.run(websiteAutomationAgent, query, {
-          maxTurns: 60,
-        });
+        const response = await runner.run(gatewayAgent,
+            chatThread.concat({ role: 'user', content: query }),
+            {
+                maxTurns: 60,  
+            }
+        );
         logWithIcon("agent", response.finalOutput)
+        chatThread = response.history;
         // console.log(res)
         console.log(chalk.gray("-----------------------------------------"));
     } catch (error) {
-        logWithIcon("error", err.message);
+        logWithIcon("error", error.message);
     }
 }
 
-// chatWithAgent("Hey what you are doing...")
+const banner = figlet.textSync("WEB AI AGENT", {
+  font: "Big",
+  horizontalLayout: "full",
+});
+
+console.log(gradient.pastel.multiline(banner));  // 🌈 gradient banner
+console.log(chalk.cyan("Welcome to CLI-Agent! Type 'exit' to quit.\n"));
+
+
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -177,18 +220,19 @@ const rl = readline.createInterface({
   prompt: "👤 ", // prompt symbol
 });
 
-console.log(chalk.green("Welcome to CLI-Agent! Type 'exit' to quit."));
+
 rl.prompt();
 
 rl.on("line",(input) => {
   if (input.trim().toLowerCase() === "exit") {
-    logWithIcon("info", "Goodbye!");
+    logWithIcon("info", " Goodbye!\n");
     rl.close();
     return;
   }
 
   // predefined actions
   chatWithAgent(input)
+  console.log("\n");
 
   rl.prompt(); // show prompt again
 });
